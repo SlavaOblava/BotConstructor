@@ -1,0 +1,95 @@
+<!-- index.html (версия 4.0, с отладкой и защитой) -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Конструктор Ботов</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background-color: var(--tg-theme-bg-color, #212121); color: var(--tg-theme-text-color, #ffffff); margin: 0; padding: 15px; }
+        h1 { font-size: 24px; margin-top: 0; margin-bottom: 20px; }
+        .bot-list { display: flex; flex-direction: column; gap: 10px; }
+        .bot-item { background-color: var(--tg-theme-secondary-bg-color, #333); border-radius: 8px; padding: 12px 15px; cursor: pointer; transition: background-color 0.2s; font-size: 16px; }
+        p { font-size: 14px; color: var(--tg-theme-hint-color, #aaa); }
+    </style>
+</head>
+<body>
+    <h1>Мои боты</h1>
+    <div id="bot-list-container" class="bot-list">
+        <p>Инициализация...</p>
+    </div>
+
+    <!-- Сначала загружаем скрипт Telegram -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <!-- Затем наш собственный скрипт -->
+    <script>
+        // Ждем, пока весь контент страницы загрузится
+        document.addEventListener("DOMContentLoaded", function() {
+
+            // Проверяем, доступен ли объект Telegram
+            if (window.Telegram && window.Telegram.WebApp) {
+                const tg = window.Telegram.WebApp;
+
+                // Инициализируем приложение
+                tg.ready();
+                tg.expand();
+
+                // Настраиваем и показываем главную кнопку
+                tg.MainButton.setText('➕ Добавить нового бота');
+                tg.MainButton.show();
+
+                // Вешаем обработчик на нажатие
+                tg.onEvent('mainButtonClicked', function() {
+                    // Отправляем данные в Python-бот
+                    tg.sendData(JSON.stringify({command: 'add_bot_start'}));
+                });
+
+                // Функция для отрисовки списка ботов
+                function renderBots(bots) {
+                    const container = document.getElementById('bot-list-container');
+                    container.innerHTML = '';
+                    if (!bots || bots.length === 0) {
+                        container.innerHTML = '<p>У вас пока нет ботов. Нажмите кнопку внизу, чтобы добавить первого.</p>';
+                    } else {
+                        bots.forEach(bot => {
+                            const botDiv = document.createElement('div');
+                            botDiv.className = 'bot-item';
+                            botDiv.innerText = `@${bot.username}`;
+                            // Вешаем обработчик на клик по боту
+                            botDiv.onclick = () => {
+                                tg.sendData(JSON.stringify({command: 'config_bot', bot_id: bot.id}));
+                            };
+                            container.appendChild(botDiv);
+                        });
+                    }
+                }
+
+                // ВНИМАНИЕ: Логика получения данных из Python-бота
+                // Этот код должен выполняться только если мы внутри Telegram
+                // Он будет вызван бэкендом через answer_web_app_query
+                 tg.onEvent('web_app_data_received', (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'my_bots_list') {
+                            renderBots(data.bots);
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse data from bot:', e);
+                        document.getElementById('bot-list-container').innerText = 'Ошибка обработки данных от бота.';
+                    }
+                });
+
+                // Сразу после загрузки запрашиваем список ботов
+                tg.sendData(JSON.stringify({command: 'get_my_bots'}));
+
+            } else {
+                // Этот блок выполнится, если страница открыта в обычном браузере
+                const container = document.getElementById('bot-list-container');
+                container.innerHTML = '<p>Это веб-приложение предназначено для запуска только внутри Telegram.</p>';
+                console.log("Telegram WebApp API не найдено. Это нормально, если вы открыли страницу в обычном браузере.");
+            }
+        });
+    </script>
+</body>
+</html>
